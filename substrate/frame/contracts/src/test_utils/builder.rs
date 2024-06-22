@@ -18,8 +18,8 @@
 use super::GAS_LIMIT;
 use crate::{
 	AccountIdLookupOf, AccountIdOf, BalanceOf, Code, CodeHash, CollectEvents, Config,
-	ContractExecResult, ContractInstantiateResult, DebugInfo, Determinism, EventRecordOf,
-	ExecReturnValue, InstantiateReturnValue, OriginFor, Pallet, Weight,
+	ContractExecResult, ContractInstantiateResult, DebugInfo, EventRecordOf, ExecReturnValue,
+	InstantiateReturnValue, OriginFor, Pallet, Weight,
 };
 use codec::{Encode, HasCompact};
 use core::fmt::Debug;
@@ -156,7 +156,7 @@ builder!(
 			code,
 			data: vec![],
 			salt: vec![],
-			debug: DebugInfo::Skip,
+			debug: DebugInfo::UnsafeDebug,
 			collect_events: CollectEvents::Skip,
 		}
 	}
@@ -195,7 +195,6 @@ builder!(
 		data: Vec<u8>,
 		debug: DebugInfo,
 		collect_events: CollectEvents,
-		determinism: Determinism,
 	) -> ContractExecResult<BalanceOf<T>, EventRecordOf<T>>;
 
 	/// Build the call and unwrap the result.
@@ -212,9 +211,8 @@ builder!(
 			gas_limit: GAS_LIMIT,
 			storage_deposit_limit: None,
 			data: vec![],
-			debug: DebugInfo::Skip,
+			debug: DebugInfo::UnsafeDebug,
 			collect_events: CollectEvents::Skip,
-			determinism: Determinism::Enforced,
 		}
 	}
 );

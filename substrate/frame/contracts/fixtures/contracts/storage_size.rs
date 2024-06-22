@@ -21,6 +21,8 @@
 use common::input;
 use uapi::{HostFn, HostFnImpl as api};
 
+static mut BUFFER: [u8; 16 * 1024 + 1] = [0u8; 16 * 1024 + 1];
+
 #[no_mangle]
 #[polkavm_derive::polkavm_export]
 pub extern "C" fn deploy() {}
@@ -30,8 +32,9 @@ pub extern "C" fn deploy() {}
 pub extern "C" fn call() {
 	input!(len: u32, );
 
-	let mut buffer = [0u8; 16 * 1024 + 1];
-	let data = &buffer[..len as usize];
+	let data = unsafe {
+		&BUFFER[..len as usize]
+	};
 
 	// Place a garbage value in storage, the size of which is specified by the call input.
 	let mut key = [0u8; 32];
@@ -39,7 +42,9 @@ pub extern "C" fn call() {
 
 	api::set_storage(&key, data);
 
-	let data = &mut &mut buffer[..];
+	let data = unsafe {
+		&mut &mut BUFFER[..]
+	};
 	api::get_storage(&key, data).unwrap();
 	assert_eq!(data.len(), len as usize);
 }

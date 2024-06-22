@@ -44,6 +44,6 @@ pub extern "C" fn call() {
 	let input = [0u8; 0];
 	api::delegate_call(uapi::CallFlags::empty(), code_hash, &input, None).unwrap();
 
-	api::get_storage(&[1u8], value).unwrap();
+	api::get_storage(&key, value).unwrap();
 	assert!(value[0] == 1u8);
 }

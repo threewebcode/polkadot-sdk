@@ -20,12 +20,9 @@
 
 mod flags;
 pub use flags::*;
-
-#[cfg(any(target_arch = "wasm32", target_arch = "riscv32"))]
 mod host;
 
-#[cfg(any(target_arch = "wasm32", target_arch = "riscv32"))]
-pub use host::*;
+pub use host::{HostFn, HostFnImpl};
 
 macro_rules! define_error_codes {
     (
@@ -36,7 +33,7 @@ macro_rules! define_error_codes {
     ) => {
         /// Every error that can be returned to a contract when it calls any of the host functions.
         #[derive(Debug, PartialEq, Eq)]
-        #[repr(u8)]
+        #[repr(u32)]
         pub enum ReturnErrorCode {
             /// API call successful.
             Success = 0,
