@@ -189,7 +189,6 @@ mod tests {
 	use crate::bridge_common_config::BridgeGrandpaWestendInstance;
 	use bridge_runtime_common::{
 		assert_complete_bridge_types,
-		extensions::refund_relayer_extension::RefundableParachain,
 		integrity::{
 			assert_complete_with_parachain_bridge_constants, check_message_lane_weights,
 			AssertChainConstants, AssertCompleteBridgeConstants,
@@ -248,19 +247,20 @@ mod tests {
 			},
 		});
 
-		bridge_runtime_common::extensions::priority_calculator::per_relay_header::ensure_priority_boost_is_sane::<
+		pallet_bridge_relayers::extension::per_relay_header::ensure_priority_boost_is_sane::<
 			Runtime,
 			BridgeGrandpaWestendInstance,
 			PriorityBoostPerRelayHeader,
 		>(FEE_BOOST_PER_RELAY_HEADER);
 
-		bridge_runtime_common::extensions::priority_calculator::per_parachain_header::ensure_priority_boost_is_sane::<
+		pallet_bridge_relayers::extension::per_parachain_header::ensure_priority_boost_is_sane::<
 			Runtime,
-			RefundableParachain<WithBridgeHubWestendMessagesInstance, bp_bridge_hub_westend::BridgeHubWestend>,
+			WithBridgeHubWestendMessagesInstance,
+			bp_bridge_hub_westend::BridgeHubWestend,
 			PriorityBoostPerParachainHeader,
 		>(FEE_BOOST_PER_PARACHAIN_HEADER);
 
-		bridge_runtime_common::extensions::priority_calculator::per_message::ensure_priority_boost_is_sane::<
+		pallet_bridge_relayers::extension::per_message::ensure_priority_boost_is_sane::<
 			Runtime,
 			WithBridgeHubWestendMessagesInstance,
 			PriorityBoostPerMessage,

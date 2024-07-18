@@ -204,13 +204,13 @@ mod tests {
 		// Bulletin chain - it has the same (almost) runtime for Polkadot Bulletin and Rococo
 		// Bulletin, so we have to adhere Polkadot names here
 
-		bridge_runtime_common::extensions::priority_calculator::per_relay_header::ensure_priority_boost_is_sane::<
+		pallet_bridge_relayers::extension::per_relay_header::ensure_priority_boost_is_sane::<
 			Runtime,
 			BridgeGrandpaRococoBulletinInstance,
 			PriorityBoostPerRelayHeader,
 		>(FEE_BOOST_PER_RELAY_HEADER);
 
-		bridge_runtime_common::extensions::priority_calculator::per_message::ensure_priority_boost_is_sane::<
+		pallet_bridge_relayers::extension::per_message::ensure_priority_boost_is_sane::<
 			Runtime,
 			WithRococoBulletinMessagesInstance,
 			PriorityBoostPerMessage,
