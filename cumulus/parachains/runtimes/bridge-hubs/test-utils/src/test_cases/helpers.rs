@@ -156,8 +156,8 @@ where
 	fn verify_outcome(&self) {
 		assert_eq!(
 			pallet_bridge_messages::InboundLanes::<Runtime, MPI>::get(self.lane)
-				.last_delivered_nonce(),
-			self.expected_nonce,
+				.map(|d| d.last_delivered_nonce()),
+			Some(self.expected_nonce),
 		);
 	}
 }
