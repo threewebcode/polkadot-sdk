@@ -372,17 +372,12 @@ async fn maybe_prepare_validation<Sender>(
 	}
 
 	// On every active leaf check candidates and prepare PVFs our node doesn't have yet.
-	if state.is_next_session_authority {
-		let Some(ref executor_params) = state.executor_params else { return };
-		let code_hashes = prepare_pvfs_for_backed_candidates(
-			sender,
-			validation_backend,
-			leaf.hash,
-			executor_params,
-			&state.already_prepared_code_hashes,
-			state.per_block_limit,
-		)
-		.await;
+	if state.is_next_session_authority && state.executor_params.is_some() {
+		let waiting_code_hashes =
+			collect_waiting_validation_code_hashes(sender, leaf.hash, &state).await;
+		state.waiting.extend(waiting_code_hashes);
+		let code_hashes =
+			prepare_pvfs_for_backed_candidates(sender, validation_backend, leaf.hash, &state).await;
 		state.already_prepared_code_hashes.extend(code_hashes.unwrap_or_default());
 	}
 }
@@ -463,18 +458,54 @@ where
 	is_past_present_or_future_authority && !is_present_authority
 }
 
+async fn collect_waiting_validation_code_hashes<Sender>(
+	sender: &mut Sender,
+	relay_parent: Hash,
+	state: &PrepareValidationState,
+) -> Vec<ValidationCodeHash>
+where
+	Sender: SubsystemSender<RuntimeApiMessage>,
+{
+	let Ok(Ok(events)) = util::request_candidate_events(relay_parent, sender).await.await else {
+		gum::warn!(
+			target: LOG_TARGET,
+			?relay_parent,
+			"cannot fetch candidate events from runtime API",
+		);
+		return vec![];
+	};
+	let code_hashes = events
+		.into_iter()
+		.filter_map(|e| match e {
+			CandidateEvent::CandidateBacked(receipt, ..) => {
+				let h = receipt.descriptor.validation_code_hash;
+				if state.waiting.contains(&h) ||
+					state.pending.contains(&h) ||
+					state.processed.contains(&h)
+				{
+					None
+				} else {
+					Some(h)
+				}
+			},
+			_ => None,
+		})
+		.collect::<Vec<_>>();
+
+	code_hashes
+}
+
 // Sends PVF with unknown code hashes to the validation host returning the list of code hashes sent.
 async fn prepare_pvfs_for_backed_candidates<Sender>(
 	sender: &mut Sender,
 	mut validation_backend: impl ValidationBackend,
 	relay_parent: Hash,
-	executor_params: &ExecutorParams,
-	already_prepared: &HashSet<ValidationCodeHash>,
-	per_block_limit: usize,
+	state: &PrepareValidationState,
 ) -> Option<Vec<ValidationCodeHash>>
 where
 	Sender: SubsystemSender<RuntimeApiMessage>,
 {
+	let Some(ref executor_params) = state.executor_params else { return None };
 	let Ok(Ok(events)) = util::request_candidate_events(relay_parent, sender).await.await else {
 		gum::warn!(
 			target: LOG_TARGET,
@@ -488,7 +519,7 @@ where
 		.filter_map(|e| match e {
 			CandidateEvent::CandidateBacked(receipt, ..) => {
 				let h = receipt.descriptor.validation_code_hash;
-				if already_prepared.contains(&h) {
+				if state.already_prepared_code_hashes.contains(&h) {
 					None
 				} else {
 					Some(h)
@@ -496,7 +527,7 @@ where
 			},
 			_ => None,
 		})
-		.take(per_block_limit)
+		.take(state.per_block_limit)
 		.collect::<Vec<_>>();
 
 	let timeout = pvf_prep_timeout(executor_params, PvfPrepKind::Prepare);
