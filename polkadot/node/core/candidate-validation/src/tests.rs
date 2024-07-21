@@ -1421,13 +1421,6 @@ fn maybe_prepare_validation_golden_path() {
 
 		assert_matches!(
 			ctx_handle.recv().await,
-			AllMessages::RuntimeApi(RuntimeApiMessage::Request(_, RuntimeApiRequest::CandidateEvents(tx))) => {
-				let _ = tx.send(Ok(vec![dummy_candidate_backed(activated_hash, dummy_hash().into())]));
-			}
-		);
-
-		assert_matches!(
-			ctx_handle.recv().await,
 			AllMessages::RuntimeApi(RuntimeApiMessage::Request(_, RuntimeApiRequest::SessionIndexForChild(tx))) => {
 				let _ = tx.send(Ok(1));
 			}
@@ -1438,6 +1431,13 @@ fn maybe_prepare_validation_golden_path() {
 			AllMessages::RuntimeApi(RuntimeApiMessage::Request(_, RuntimeApiRequest::SessionExecutorParams(index, tx))) => {
 				assert_eq!(index, 1);
 				let _ = tx.send(Ok(Some(ExecutorParams::default())));
+			}
+		);
+
+		assert_matches!(
+			ctx_handle.recv().await,
+			AllMessages::RuntimeApi(RuntimeApiMessage::Request(_, RuntimeApiRequest::CandidateEvents(tx))) => {
+				let _ = tx.send(Ok(vec![dummy_candidate_backed(activated_hash, dummy_hash().into())]));
 			}
 		);
 
@@ -1608,13 +1608,6 @@ fn maybe_prepare_validation_does_not_prepare_pvfs_if_no_new_session_but_a_valida
 
 		assert_matches!(
 			ctx_handle.recv().await,
-			AllMessages::RuntimeApi(RuntimeApiMessage::Request(_, RuntimeApiRequest::CandidateEvents(tx))) => {
-				let _ = tx.send(Ok(vec![dummy_candidate_backed(activated_hash, dummy_hash().into())]));
-			}
-		);
-
-		assert_matches!(
-			ctx_handle.recv().await,
 			AllMessages::RuntimeApi(RuntimeApiMessage::Request(_, RuntimeApiRequest::SessionIndexForChild(tx))) => {
 				let _ = tx.send(Ok(1));
 			}
@@ -1625,6 +1618,13 @@ fn maybe_prepare_validation_does_not_prepare_pvfs_if_no_new_session_but_a_valida
 			AllMessages::RuntimeApi(RuntimeApiMessage::Request(_, RuntimeApiRequest::SessionExecutorParams(index, tx))) => {
 				assert_eq!(index, 1);
 				let _ = tx.send(Ok(Some(ExecutorParams::default())));
+			}
+		);
+
+		assert_matches!(
+			ctx_handle.recv().await,
+			AllMessages::RuntimeApi(RuntimeApiMessage::Request(_, RuntimeApiRequest::CandidateEvents(tx))) => {
+				let _ = tx.send(Ok(vec![dummy_candidate_backed(activated_hash, dummy_hash().into())]));
 			}
 		);
 
@@ -1779,18 +1779,6 @@ fn maybe_prepare_validation_prepares_a_limited_number_of_pvfs() {
 
 		assert_matches!(
 			ctx_handle.recv().await,
-			AllMessages::RuntimeApi(RuntimeApiMessage::Request(_, RuntimeApiRequest::CandidateEvents(tx))) => {
-				let candidates = vec![
-					dummy_candidate_backed(activated_hash, ValidationCode(vec![0; 16]).hash()),
-					dummy_candidate_backed(activated_hash, ValidationCode(vec![1; 16]).hash()),
-					dummy_candidate_backed(activated_hash, ValidationCode(vec![2; 16]).hash()),
-				];
-				let _ = tx.send(Ok(candidates));
-			}
-		);
-
-		assert_matches!(
-			ctx_handle.recv().await,
 			AllMessages::RuntimeApi(RuntimeApiMessage::Request(_, RuntimeApiRequest::SessionIndexForChild(tx))) => {
 				let _ = tx.send(Ok(1));
 			}
@@ -1801,6 +1789,18 @@ fn maybe_prepare_validation_prepares_a_limited_number_of_pvfs() {
 			AllMessages::RuntimeApi(RuntimeApiMessage::Request(_, RuntimeApiRequest::SessionExecutorParams(index, tx))) => {
 				assert_eq!(index, 1);
 				let _ = tx.send(Ok(Some(ExecutorParams::default())));
+			}
+		);
+
+		assert_matches!(
+			ctx_handle.recv().await,
+			AllMessages::RuntimeApi(RuntimeApiMessage::Request(_, RuntimeApiRequest::CandidateEvents(tx))) => {
+				let candidates = vec![
+					dummy_candidate_backed(activated_hash, ValidationCode(vec![0; 16]).hash()),
+					dummy_candidate_backed(activated_hash, ValidationCode(vec![1; 16]).hash()),
+					dummy_candidate_backed(activated_hash, ValidationCode(vec![2; 16]).hash()),
+				];
+				let _ = tx.send(Ok(candidates));
 			}
 		);
 
@@ -1848,6 +1848,7 @@ fn maybe_prepare_validation_does_not_prepare_already_prepared_pvfs() {
 			ValidationCode(vec![0; 16]).hash(),
 			ValidationCode(vec![1; 16]).hash(),
 		]),
+		executor_params: None,
 		waiting: HashSet::new(),
 		pending: HashSet::new(),
 		processed: HashSet::new(),
@@ -1866,18 +1867,6 @@ fn maybe_prepare_validation_does_not_prepare_already_prepared_pvfs() {
 
 		assert_matches!(
 			ctx_handle.recv().await,
-			AllMessages::RuntimeApi(RuntimeApiMessage::Request(_, RuntimeApiRequest::CandidateEvents(tx))) => {
-				let candidates = vec![
-					dummy_candidate_backed(activated_hash, ValidationCode(vec![0; 16]).hash()),
-					dummy_candidate_backed(activated_hash, ValidationCode(vec![1; 16]).hash()),
-					dummy_candidate_backed(activated_hash, ValidationCode(vec![2; 16]).hash()),
-				];
-				let _ = tx.send(Ok(candidates));
-			}
-		);
-
-		assert_matches!(
-			ctx_handle.recv().await,
 			AllMessages::RuntimeApi(RuntimeApiMessage::Request(_, RuntimeApiRequest::SessionIndexForChild(tx))) => {
 				let _ = tx.send(Ok(1));
 			}
@@ -1888,6 +1877,18 @@ fn maybe_prepare_validation_does_not_prepare_already_prepared_pvfs() {
 			AllMessages::RuntimeApi(RuntimeApiMessage::Request(_, RuntimeApiRequest::SessionExecutorParams(index, tx))) => {
 				assert_eq!(index, 1);
 				let _ = tx.send(Ok(Some(ExecutorParams::default())));
+			}
+		);
+
+		assert_matches!(
+			ctx_handle.recv().await,
+			AllMessages::RuntimeApi(RuntimeApiMessage::Request(_, RuntimeApiRequest::CandidateEvents(tx))) => {
+				let candidates = vec![
+					dummy_candidate_backed(activated_hash, ValidationCode(vec![0; 16]).hash()),
+					dummy_candidate_backed(activated_hash, ValidationCode(vec![1; 16]).hash()),
+					dummy_candidate_backed(activated_hash, ValidationCode(vec![2; 16]).hash()),
+				];
+				let _ = tx.send(Ok(candidates));
 			}
 		);
 

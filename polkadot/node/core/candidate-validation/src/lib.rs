@@ -315,6 +315,7 @@ struct PrepareValidationState {
 	already_prepared_code_hashes: HashSet<ValidationCodeHash>,
 	// How many PVFs per block we take to prepare themselves for the next session validation
 	per_block_limit: usize,
+	executor_params: Option<ExecutorParams>,
 	waiting: HashSet<ValidationCodeHash>,
 	pending: HashSet<ValidationCodeHash>,
 	processed: HashSet<ValidationCodeHash>,
@@ -327,21 +328,11 @@ impl Default for PrepareValidationState {
 			is_next_session_authority: false,
 			already_prepared_code_hashes: HashSet::new(),
 			per_block_limit: 1,
+			executor_params: None,
 			waiting: HashSet::new(),
 			pending: HashSet::new(),
 			processed: HashSet::new(),
 		}
-	}
-}
-
-impl PrepareValidationState {
-	fn reset_session(&mut self, session_index: SessionIndex, is_next_session_authority: bool) {
-		self.session_index = Some(session_index);
-		self.already_prepared_code_hashes.clear();
-		self.waiting.clear();
-		self.pending.clear();
-		self.processed.clear();
-		self.is_next_session_authority = is_next_session_authority;
 	}
 }
 
@@ -357,17 +348,37 @@ async fn maybe_prepare_validation<Sender>(
 	let Some(leaf) = update.activated else { return };
 	let new_session_index = new_session_index(sender, state.session_index, leaf.hash).await;
 	if let Some(new_session_index) = new_session_index {
-		let is_next_session_authority =
+		state.session_index = Some(new_session_index);
+		state.already_prepared_code_hashes.clear();
+		state.executor_params = None;
+		state.waiting.clear();
+		state.pending.clear();
+		state.processed.clear();
+		state.is_next_session_authority =
 			check_next_session_authority(sender, keystore, leaf.hash, new_session_index).await;
-		state.reset_session(new_session_index, is_next_session_authority)
+	}
+
+	if state.is_next_session_authority && state.executor_params.is_none() {
+		if let Ok(executor_params) = util::executor_params_at_relay_parent(leaf.hash, sender).await
+		{
+			state.executor_params = Some(executor_params);
+		} else {
+			gum::warn!(
+				target: LOG_TARGET,
+				relay_parent = ?leaf.hash,
+				"cannot fetch executor params for the session",
+			);
+		};
 	}
 
 	// On every active leaf check candidates and prepare PVFs our node doesn't have yet.
 	if state.is_next_session_authority {
+		let Some(ref executor_params) = state.executor_params else { return };
 		let code_hashes = prepare_pvfs_for_backed_candidates(
 			sender,
 			validation_backend,
 			leaf.hash,
+			executor_params,
 			&state.already_prepared_code_hashes,
 			state.per_block_limit,
 		)
@@ -457,6 +468,7 @@ async fn prepare_pvfs_for_backed_candidates<Sender>(
 	sender: &mut Sender,
 	mut validation_backend: impl ValidationBackend,
 	relay_parent: Hash,
+	executor_params: &ExecutorParams,
 	already_prepared: &HashSet<ValidationCodeHash>,
 	per_block_limit: usize,
 ) -> Option<Vec<ValidationCodeHash>>
@@ -487,16 +499,7 @@ where
 		.take(per_block_limit)
 		.collect::<Vec<_>>();
 
-	let Ok(executor_params) = util::executor_params_at_relay_parent(relay_parent, sender).await
-	else {
-		gum::warn!(
-			target: LOG_TARGET,
-			?relay_parent,
-			"cannot fetch executor params for the session",
-		);
-		return None
-	};
-	let timeout = pvf_prep_timeout(&executor_params, PvfPrepKind::Prepare);
+	let timeout = pvf_prep_timeout(executor_params, PvfPrepKind::Prepare);
 
 	let mut active_pvfs = vec![];
 	let mut processed_code_hashes = vec![];
