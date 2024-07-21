@@ -336,7 +336,7 @@ impl Default for PrepareValidationState {
 async fn maybe_prepare_validation<Sender>(
 	sender: &mut Sender,
 	keystore: KeystorePtr,
-	validation_backend: impl ValidationBackend,
+	mut validation_backend: impl ValidationBackend,
 	update: ActiveLeavesUpdate,
 	state: &mut PrepareValidationState,
 ) where
@@ -368,13 +368,24 @@ async fn maybe_prepare_validation<Sender>(
 	}
 
 	// On every active leaf check candidates and prepare PVFs our node doesn't have yet.
-	if state.is_next_session_authority && state.executor_params.is_some() {
+	if state.is_next_session_authority {
+		let Some(ref executor_params) = state.executor_params else { return };
 		let waiting_code_hashes =
 			collect_waiting_validation_code_hashes(sender, leaf.hash, &state).await;
 		state.waiting.extend(waiting_code_hashes);
 
 		if state.pending.is_empty() {
-			state.pending = state.waiting.clone();
+			let waiting = state.waiting.iter().cloned().collect();
+			let Ok(pending) = validation_backend.ensure_pvf(waiting, executor_params.clone()).await
+			else {
+				gum::warn!(
+					target: LOG_TARGET,
+					relay_parent = ?leaf.hash,
+					"cannot ensure prepared PVF",
+				);
+				return
+			};
+			state.pending = HashSet::from_iter(pending);
 			state.waiting.clear();
 		}
 
@@ -1183,11 +1194,9 @@ trait ValidationBackend {
 
 	async fn ensure_pvf(
 		&mut self,
-		_code_hashes: Vec<ValidationCodeHash>,
-		_executor_params: ExecutorParams,
-	) -> Result<Vec<ValidationCodeHash>, String> {
-		return Ok(vec![]);
-	}
+		code_hashes: Vec<ValidationCodeHash>,
+		executor_params: ExecutorParams,
+	) -> Result<Vec<ValidationCodeHash>, String>;
 }
 
 #[async_trait]
