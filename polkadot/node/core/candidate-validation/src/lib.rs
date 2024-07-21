@@ -315,6 +315,9 @@ struct PrepareValidationState {
 	already_prepared_code_hashes: HashSet<ValidationCodeHash>,
 	// How many PVFs per block we take to prepare themselves for the next session validation
 	per_block_limit: usize,
+	waiting: HashSet<ValidationCodeHash>,
+	pending: HashSet<ValidationCodeHash>,
+	processed: HashSet<ValidationCodeHash>,
 }
 
 impl Default for PrepareValidationState {
@@ -324,6 +327,9 @@ impl Default for PrepareValidationState {
 			is_next_session_authority: false,
 			already_prepared_code_hashes: HashSet::new(),
 			per_block_limit: 1,
+			waiting: HashSet::new(),
+			pending: HashSet::new(),
+			processed: HashSet::new(),
 		}
 	}
 }
@@ -342,6 +348,9 @@ async fn maybe_prepare_validation<Sender>(
 	if new_session_index.is_some() {
 		state.session_index = new_session_index;
 		state.already_prepared_code_hashes.clear();
+		state.waiting.clear();
+		state.pending.clear();
+		state.processed.clear();
 		state.is_next_session_authority = check_next_session_authority(
 			sender,
 			keystore,

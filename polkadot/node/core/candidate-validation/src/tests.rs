@@ -1848,6 +1848,9 @@ fn maybe_prepare_validation_does_not_prepare_already_prepared_pvfs() {
 			ValidationCode(vec![0; 16]).hash(),
 			ValidationCode(vec![1; 16]).hash(),
 		]),
+		waiting: HashSet::new(),
+		pending: HashSet::new(),
+		processed: HashSet::new(),
 	};
 
 	let check_fut =
