@@ -1507,7 +1507,7 @@ fn maybe_prepare_validation_resets_state_on_a_new_session() {
 	let mut state = PrepareValidationState {
 		session_index: Some(1),
 		is_next_session_authority: true,
-		already_prepared_code_hashes: HashSet::from_iter(vec![ValidationCode(vec![0; 16]).hash()]),
+		processed: HashSet::from_iter(vec![ValidationCode(vec![0; 16]).hash()]),
 		..Default::default()
 	};
 
@@ -1544,7 +1544,7 @@ fn maybe_prepare_validation_resets_state_on_a_new_session() {
 	assert_eq!(backend.heads_up_call_count.load(Ordering::SeqCst), 0);
 	assert_eq!(state.session_index.unwrap(), 2);
 	assert!(!state.is_next_session_authority);
-	assert!(state.already_prepared_code_hashes.is_empty());
+	assert!(state.processed.is_empty());
 }
 
 #[test]
@@ -1804,10 +1804,15 @@ fn maybe_prepare_validation_prepares_a_limited_number_of_pvfs() {
 			}
 		);
 
+		let code_hashes: HashSet<ValidationCodeHash> = HashSet::from_iter(vec![
+			ValidationCode(vec![0; 16]).hash(),
+			ValidationCode(vec![1; 16]).hash(),
+			ValidationCode(vec![2; 16]).hash(),
+		]);
 		assert_matches!(
 			ctx_handle.recv().await,
 			AllMessages::RuntimeApi(RuntimeApiMessage::Request(_, RuntimeApiRequest::ValidationCodeByHash(hash, tx))) => {
-				assert_eq!(hash, ValidationCode(vec![0; 16]).hash());
+				assert!(code_hashes.contains(&hash));
 				let _ = tx.send(Ok(Some(ValidationCode(Vec::new()))));
 			}
 		);
@@ -1815,7 +1820,7 @@ fn maybe_prepare_validation_prepares_a_limited_number_of_pvfs() {
 		assert_matches!(
 			ctx_handle.recv().await,
 			AllMessages::RuntimeApi(RuntimeApiMessage::Request(_, RuntimeApiRequest::ValidationCodeByHash(hash, tx))) => {
-				assert_eq!(hash, ValidationCode(vec![1; 16]).hash());
+				assert!(code_hashes.contains(&hash));
 				let _ = tx.send(Ok(Some(ValidationCode(Vec::new()))));
 			}
 		);
@@ -1827,7 +1832,7 @@ fn maybe_prepare_validation_prepares_a_limited_number_of_pvfs() {
 	assert_eq!(backend.heads_up_call_count.load(Ordering::SeqCst), 1);
 	assert!(state.session_index.is_some());
 	assert!(state.is_next_session_authority);
-	assert_eq!(state.already_prepared_code_hashes.len(), 2);
+	assert_eq!(state.processed.len(), 2);
 }
 
 #[test]
@@ -1844,14 +1849,13 @@ fn maybe_prepare_validation_does_not_prepare_already_prepared_pvfs() {
 		session_index: Some(1),
 		is_next_session_authority: true,
 		per_block_limit: 2,
-		already_prepared_code_hashes: HashSet::from_iter(vec![
-			ValidationCode(vec![0; 16]).hash(),
-			ValidationCode(vec![1; 16]).hash(),
-		]),
 		executor_params: None,
 		waiting: HashSet::new(),
 		pending: HashSet::new(),
-		processed: HashSet::new(),
+		processed: HashSet::from_iter(vec![
+			ValidationCode(vec![0; 16]).hash(),
+			ValidationCode(vec![1; 16]).hash(),
+		]),
 	};
 
 	let check_fut =
@@ -1907,5 +1911,5 @@ fn maybe_prepare_validation_does_not_prepare_already_prepared_pvfs() {
 	assert_eq!(backend.heads_up_call_count.load(Ordering::SeqCst), 1);
 	assert!(state.session_index.is_some());
 	assert!(state.is_next_session_authority);
-	assert_eq!(state.already_prepared_code_hashes.len(), 3);
+	assert_eq!(state.processed.len(), 3);
 }

@@ -311,8 +311,6 @@ async fn run<Context>(
 struct PrepareValidationState {
 	session_index: Option<SessionIndex>,
 	is_next_session_authority: bool,
-	// PVF host won't prepare the same code hash twice, so here we just avoid extra communication
-	already_prepared_code_hashes: HashSet<ValidationCodeHash>,
 	// How many PVFs per block we take to prepare themselves for the next session validation
 	per_block_limit: usize,
 	executor_params: Option<ExecutorParams>,
@@ -326,7 +324,6 @@ impl Default for PrepareValidationState {
 		Self {
 			session_index: None,
 			is_next_session_authority: false,
-			already_prepared_code_hashes: HashSet::new(),
 			per_block_limit: 1,
 			executor_params: None,
 			waiting: HashSet::new(),
@@ -349,7 +346,6 @@ async fn maybe_prepare_validation<Sender>(
 	let new_session_index = new_session_index(sender, state.session_index, leaf.hash).await;
 	if let Some(new_session_index) = new_session_index {
 		state.session_index = Some(new_session_index);
-		state.already_prepared_code_hashes.clear();
 		state.executor_params = None;
 		state.waiting.clear();
 		state.pending.clear();
@@ -376,9 +372,26 @@ async fn maybe_prepare_validation<Sender>(
 		let waiting_code_hashes =
 			collect_waiting_validation_code_hashes(sender, leaf.hash, &state).await;
 		state.waiting.extend(waiting_code_hashes);
-		let code_hashes =
-			prepare_pvfs_for_backed_candidates(sender, validation_backend, leaf.hash, &state).await;
-		state.already_prepared_code_hashes.extend(code_hashes.unwrap_or_default());
+
+		if state.pending.is_empty() {
+			state.pending = state.waiting.clone();
+			state.waiting.clear();
+		}
+
+		let code_hashes_to_process =
+			state.pending.iter().cloned().take(state.per_block_limit).collect::<Vec<_>>();
+		let processed_code_hashes = prepare_pvfs_for_backed_candidates(
+			sender,
+			validation_backend,
+			leaf.hash,
+			code_hashes_to_process,
+			&state,
+		)
+		.await;
+		for processed in processed_code_hashes {
+			let _ = state.pending.remove(&processed);
+			let _ = state.processed.insert(processed);
+		}
 	}
 }
 
@@ -500,35 +513,13 @@ async fn prepare_pvfs_for_backed_candidates<Sender>(
 	sender: &mut Sender,
 	mut validation_backend: impl ValidationBackend,
 	relay_parent: Hash,
+	code_hashes: Vec<ValidationCodeHash>,
 	state: &PrepareValidationState,
-) -> Option<Vec<ValidationCodeHash>>
+) -> Vec<ValidationCodeHash>
 where
 	Sender: SubsystemSender<RuntimeApiMessage>,
 {
-	let Some(ref executor_params) = state.executor_params else { return None };
-	let Ok(Ok(events)) = util::request_candidate_events(relay_parent, sender).await.await else {
-		gum::warn!(
-			target: LOG_TARGET,
-			?relay_parent,
-			"cannot fetch candidate events from runtime API",
-		);
-		return None
-	};
-	let code_hashes = events
-		.into_iter()
-		.filter_map(|e| match e {
-			CandidateEvent::CandidateBacked(receipt, ..) => {
-				let h = receipt.descriptor.validation_code_hash;
-				if state.already_prepared_code_hashes.contains(&h) {
-					None
-				} else {
-					Some(h)
-				}
-			},
-			_ => None,
-		})
-		.take(state.per_block_limit)
-		.collect::<Vec<_>>();
+	let Some(ref executor_params) = state.executor_params else { return vec![] };
 
 	let timeout = pvf_prep_timeout(executor_params, PvfPrepKind::Prepare);
 
@@ -570,7 +561,7 @@ where
 	}
 
 	if active_pvfs.is_empty() {
-		return None
+		return vec![]
 	}
 
 	if let Err(err) = validation_backend.heads_up(active_pvfs).await {
@@ -580,7 +571,7 @@ where
 			?err,
 			"cannot prepare PVF for the next session",
 		);
-		return None
+		return vec![]
 	};
 
 	gum::debug!(
@@ -590,7 +581,7 @@ where
 		"Prepared PVF for the next session",
 	);
 
-	Some(processed_code_hashes)
+	processed_code_hashes
 }
 
 struct RuntimeRequestFailed;
