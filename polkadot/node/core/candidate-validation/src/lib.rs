@@ -1180,6 +1180,14 @@ trait ValidationBackend {
 	async fn precheck_pvf(&mut self, pvf: PvfPrepData) -> Result<(), PrepareError>;
 
 	async fn heads_up(&mut self, active_pvfs: Vec<PvfPrepData>) -> Result<(), String>;
+
+	async fn ensure_pvf(
+		&mut self,
+		_code_hashes: Vec<ValidationCodeHash>,
+		_executor_params: ExecutorParams,
+	) -> Result<Vec<ValidationCodeHash>, String> {
+		return Ok(vec![]);
+	}
 }
 
 #[async_trait]
@@ -1225,6 +1233,18 @@ impl ValidationBackend for ValidationHost {
 
 	async fn heads_up(&mut self, active_pvfs: Vec<PvfPrepData>) -> Result<(), String> {
 		self.heads_up(active_pvfs).await
+	}
+
+	async fn ensure_pvf(
+		&mut self,
+		code_hashes: Vec<ValidationCodeHash>,
+		executor_params: ExecutorParams,
+	) -> Result<Vec<ValidationCodeHash>, String> {
+		let (tx, rx) = oneshot::channel();
+		self.ensure_pvf(code_hashes, executor_params, tx).await?;
+		let result = rx.await.map_err(|err| err.to_string())?;
+
+		result
 	}
 }
 
