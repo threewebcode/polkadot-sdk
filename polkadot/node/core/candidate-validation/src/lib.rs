@@ -334,6 +334,17 @@ impl Default for PrepareValidationState {
 	}
 }
 
+impl PrepareValidationState {
+	fn reset_session(&mut self, session_index: SessionIndex, is_next_session_authority: bool) {
+		self.session_index = Some(session_index);
+		self.already_prepared_code_hashes.clear();
+		self.waiting.clear();
+		self.pending.clear();
+		self.processed.clear();
+		self.is_next_session_authority = is_next_session_authority;
+	}
+}
+
 async fn maybe_prepare_validation<Sender>(
 	sender: &mut Sender,
 	keystore: KeystorePtr,
@@ -345,19 +356,10 @@ async fn maybe_prepare_validation<Sender>(
 {
 	let Some(leaf) = update.activated else { return };
 	let new_session_index = new_session_index(sender, state.session_index, leaf.hash).await;
-	if new_session_index.is_some() {
-		state.session_index = new_session_index;
-		state.already_prepared_code_hashes.clear();
-		state.waiting.clear();
-		state.pending.clear();
-		state.processed.clear();
-		state.is_next_session_authority = check_next_session_authority(
-			sender,
-			keystore,
-			leaf.hash,
-			state.session_index.expect("qed: just checked above"),
-		)
-		.await;
+	if let Some(new_session_index) = new_session_index {
+		let is_next_session_authority =
+			check_next_session_authority(sender, keystore, leaf.hash, new_session_index).await;
+		state.reset_session(new_session_index, is_next_session_authority)
 	}
 
 	// On every active leaf check candidates and prepare PVFs our node doesn't have yet.
